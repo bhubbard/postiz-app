@@ -1,0 +1,85 @@
+name: Deploy Postiz to Cloudflare
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feat/cloudflare-deploy
+      - main
+    paths:
+      - 'apps/backend/**'
+      - 'apps/frontend/**'
+      - 'apps/orchestrator/src/activities/**'
+      - 'libraries/**'
+      - 'cloudflare/**'
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.23.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.23.4
+
+      - name: Verify Cloudflare Worker typecheck, tests, and bundle
+        working-directory: cloudflare
+        run: |
+          pnpm install
+          pnpm run typecheck
+          pnpm test
+          npx cf deploy --dry-run --mode worker-only
+
+  deploy:
+    needs: verify
+    if: github.event_name == 'workflow_dispatch' || (github.ref == 'refs/heads/main' && vars.ENABLE_CLOUDFLARE_AUTO_DEPLOY == 'true')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.23.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.23.4
+
+      - name: Push Prisma schema
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: npx --yes prisma@6.5.0 db push --schema ./libraries/nestjs-libraries/src/database/prisma/schema.prisma
+
+      - name: Install Cloudflare workspace dependencies
+        working-directory: cloudflare
+        run: pnpm install
+
+      - name: Deploy with cf CLI
+        working-directory: cloudflare
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_BUCKETNAME: ${{ vars.CLOUDFLARE_BUCKETNAME || 'postiz-media' }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          CLOUDFLARE_INTERNAL_SECRET: ${{ secrets.CLOUDFLARE_INTERNAL_SECRET }}
+          CLOUDFLARE_ACCESS_KEY: ${{ secrets.CLOUDFLARE_ACCESS_KEY }}
+          CLOUDFLARE_SECRET_ACCESS_KEY: ${{ secrets.CLOUDFLARE_SECRET_ACCESS_KEY }}
+          CLOUDFLARE_BUCKET_URL: ${{ secrets.CLOUDFLARE_BUCKET_URL }}
+        run: |
+          cat <<EOF > /tmp/cf-secrets.env
+          DATABASE_URL="${DATABASE_URL}"
+          JWT_SECRET="${JWT_SECRET}"
+          CLOUDFLARE_INTERNAL_SECRET="${CLOUDFLARE_INTERNAL_SECRET}"
+          CLOUDFLARE_ACCOUNT_ID="${CLOUDFLARE_ACCOUNT_ID}"
+          CLOUDFLARE_ACCESS_KEY="${CLOUDFLARE_ACCESS_KEY}"
+          CLOUDFLARE_SECRET_ACCESS_KEY="${CLOUDFLARE_SECRET_ACCESS_KEY}"
+          CLOUDFLARE_BUCKET_URL="${CLOUDFLARE_BUCKET_URL}"
+          EOF
+          npx cf deploy --secrets-file /tmp/cf-secrets.env --containers-rollout gradual
+        shell: bash

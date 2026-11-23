@@ -17,6 +17,12 @@ import { TemporalRegisterMissingSearchAttributesModule } from '@gitroom/nestjs-l
 import { InfiniteWorkflowRegisterModule } from '@gitroom/nestjs-libraries/temporal/infinite.workflow.register';
 import { ThrottlerStorageRedisService } from '@nest-lab/throttler-storage-redis';
 import { ioRedis } from '@gitroom/nestjs-libraries/redis/redis.service';
+import { CloudflareThrottlerStorage } from '@gitroom/nestjs-libraries/redis/cloudflare.redis';
+import { InternalActivitiesModule } from '@gitroom/backend/internal/internal-activities.module';
+
+const useCloudflareState =
+  process.env.REDIS_DRIVER === 'cloudflare' ||
+  (!process.env.REDIS_URL && !!process.env.CLOUDFLARE_INTERNAL_URL);
 
 @Global()
 @Module({
@@ -32,6 +38,9 @@ import { ioRedis } from '@gitroom/nestjs-libraries/redis/redis.service';
     getTemporalModule(false),
     TemporalRegisterMissingSearchAttributesModule,
     InfiniteWorkflowRegisterModule,
+    ...(process.env.WORKFLOW_DRIVER === 'cloudflare'
+      ? [InternalActivitiesModule]
+      : []),
     ThrottlerModule.forRoot({
       throttlers: [
         {
@@ -39,7 +48,9 @@ import { ioRedis } from '@gitroom/nestjs-libraries/redis/redis.service';
           limit: process.env.API_LIMIT ? Number(process.env.API_LIMIT) : 90,
         },
       ],
-      storage: new ThrottlerStorageRedisService(ioRedis),
+      storage: useCloudflareState
+        ? new CloudflareThrottlerStorage()
+        : new ThrottlerStorageRedisService(ioRedis),
     }),
   ],
   controllers: [],

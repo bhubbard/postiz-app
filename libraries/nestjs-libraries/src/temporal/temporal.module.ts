@@ -1,12 +1,17 @@
 import { TemporalModule } from 'nestjs-temporal-core';
 import { socialIntegrationList } from '@gitroom/nestjs-libraries/integrations/integration.manager';
 import { emailQueues } from '@gitroom/nestjs-libraries/temporal/email.queues';
+import { CloudflareTemporalModule } from '@gitroom/nestjs-libraries/temporal/cloudflare.temporal.module';
 
 export const getTemporalModule = (
   isWorkers: boolean,
   path?: string,
   activityClasses?: any[]
 ) => {
+  if (process.env.WORKFLOW_DRIVER === 'cloudflare') {
+    return CloudflareTemporalModule.forRoot();
+  }
+
   // Queues this worker server should NOT run, comma-separated
   // (e.g. EXCLUDE_QUEUE="reddit,x,twitch"). Use it to pin a queue to a single
   // server: exclude it on every server except the one that should own it.

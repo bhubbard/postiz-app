@@ -1,4 +1,5 @@
 import { Redis } from 'ioredis';
+import { CloudflareStateRedis } from './cloudflare.redis';
 
 // Create a mock Redis implementation for testing environments
 class MockRedis {
@@ -35,10 +36,17 @@ class MockRedis {
   // Add other Redis methods as needed for your tests
 }
 
-// Use real Redis if REDIS_URL is defined, otherwise use MockRedis
+const useCloudflareState =
+  process.env.REDIS_DRIVER === 'cloudflare' ||
+  (!process.env.REDIS_URL && !!process.env.CLOUDFLARE_INTERNAL_URL);
+
+// Use real Redis if REDIS_URL is defined, Cloudflare DO state when configured,
+// otherwise fall back to MockRedis for isolated test environments.
 export const ioRedis = process.env.REDIS_URL
   ? new Redis(process.env.REDIS_URL, {
       maxRetriesPerRequest: null,
       connectTimeout: 10000,
     })
-  : (new MockRedis() as unknown as Redis); // Type cast to Redis to maintain interface compatibility
+  : useCloudflareState
+    ? (new CloudflareStateRedis() as unknown as Redis)
+    : (new MockRedis() as unknown as Redis); // Type cast to Redis to maintain interface compatibility

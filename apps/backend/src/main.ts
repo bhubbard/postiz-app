@@ -4,8 +4,11 @@ import compression from 'compression';
 
 import { loadSwagger } from '@gitroom/helpers/swagger/load.swagger';
 import { json } from 'express';
-import { Runtime } from '@temporalio/worker';
-Runtime.install({ shutdownSignals: [] });
+if (process.env.WORKFLOW_DRIVER !== 'cloudflare') {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { Runtime } = require('@temporalio/worker');
+  Runtime.install({ shutdownSignals: [] });
+}
 
 process.env.TZ = 'UTC';
 
@@ -70,6 +73,12 @@ async function start() {
   app.use(['/copilot/{*splat}', '/posts'], (req: any, res: any, next: any) => {
     json({ limit: '50mb' })(req, res, next);
   });
+
+  if (process.env.WORKFLOW_DRIVER === 'cloudflare') {
+    app.use('/internal', (req: any, res: any, next: any) => {
+      json({ limit: '10mb' })(req, res, next);
+    });
+  }
 
   app.use(cookieParser());
   app.use(compression());

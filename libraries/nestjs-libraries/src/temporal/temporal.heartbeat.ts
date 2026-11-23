@@ -43,6 +43,9 @@ export const setHeartbeatDetails = (details: string) => {
 };
 
 export const withHeartbeat = async <T>(fn: () => Promise<T>): Promise<T> => {
+  if (process.env.WORKFLOW_DRIVER === 'cloudflare') {
+    return fn();
+  }
   // Mark the activity as entered before anything can block. If a timed-out
   // activity carries no details at all, it never got this far - meaning the
   // task was dispatched to the worker and the function was never invoked,

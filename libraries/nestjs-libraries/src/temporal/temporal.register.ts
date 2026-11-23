@@ -7,7 +7,10 @@ export class TemporalRegister implements OnModuleInit {
   constructor(private _client: TemporalService) {}
 
   async onModuleInit(): Promise<void> {
-    if (process.env.TEMPORAL_TLS === 'true') {
+    if (
+      process.env.WORKFLOW_DRIVER === 'cloudflare' ||
+      process.env.TEMPORAL_TLS === 'true'
+    ) {
       return;
     }
     const connection = this._client?.client?.getRawClient()

@@ -63,6 +63,13 @@ export class ConfigurationChecker {
   }
 
   checkRedis() {
+    if (
+      this.cfg.REDIS_DRIVER === 'cloudflare' ||
+      (!this.cfg.REDIS_URL && !!this.cfg.CLOUDFLARE_INTERNAL_URL)
+    ) {
+      return;
+    }
+
     if (!this.cfg.REDIS_URL) {
       this.issues.push('REDIS_URL not set');
     }
@@ -70,8 +77,8 @@ export class ConfigurationChecker {
     try {
       const redisUrl = new URL(this.cfg.REDIS_URL);
 
-      if (redisUrl.protocol !== 'redis:') {
-        this.issues.push('REDIS_URL must start with redis://');
+      if (redisUrl.protocol !== 'redis:' && redisUrl.protocol !== 'rediss:') {
+        this.issues.push('REDIS_URL must start with redis:// or rediss://');
       }
     } catch (error) {
       this.issues.push('REDIS_URL is not a valid URL');
